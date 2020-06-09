@@ -1,0 +1,4 @@
+**/*.sw[op]
+yolov3.weights
+yolov3.h5
+*_detected.jpg

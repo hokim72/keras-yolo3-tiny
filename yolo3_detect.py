@@ -3,9 +3,6 @@ import os
 import sys
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.layers import Conv2D, Input, BatchNormalization, LeakyReLU, ZeroPadding2D, UpSampling2D, Add, Concatenate
-from tensorflow.keras.models import Model
-import struct
 import cv2
 
 np.set_printoptions(threshold=sys.maxsize)
@@ -20,71 +17,14 @@ argparser = argparse.ArgumentParser(
     description='test yolov3 network with coco weights')
 
 argparser.add_argument(
-    '-w',
-    '--weights',
-    help='path to weights file')
+    '-m',
+    '--model',
+    help='path to model file')
 
 argparser.add_argument(
     '-i',
     '--image',
     help='path to image file')
-
-class WeightReader:
-    def __init__(self, weight_file):
-        with open(weight_file, 'rb') as w_f:
-            major,    = struct.unpack('i', w_f.read(4))
-            minor,    = struct.unpack('i', w_f.read(4))
-            revision, = struct.unpack('i', w_f.read(4))
-
-            if (major*10 + minor) >= 2 and major < 1000 and minor < 1000:
-                w_f.read(8)
-            else:
-                w_f.read(4)
-
-            binary = w_f.read()
-
-        self.offset = 0
-        self.all_weights = np.frombuffer(binary, dtype='float32')
-        
-    def read_bytes(self, size):
-        self.offset = self.offset + size
-        return self.all_weights[self.offset-size:self.offset]
-
-    def load_weights(self, model):
-        for i in range(106):
-            try:
-                conv_layer = model.get_layer('conv_' + str(i))
-                print("loading weights of convolution #" + str(i))
-
-                if i not in [81, 93, 105]:
-                    norm_layer = model.get_layer('bnorm_' + str(i))
-
-                    size = np.prod(norm_layer.get_weights()[0].shape)
-
-                    beta  = self.read_bytes(size) # bias
-                    gamma = self.read_bytes(size) # scale
-                    mean  = self.read_bytes(size) # mean
-                    var   = self.read_bytes(size) # variance            
-
-                    weights = norm_layer.set_weights([gamma, beta, mean, var])  
-
-                if len(conv_layer.get_weights()) > 1:
-                    bias   = self.read_bytes(np.prod(conv_layer.get_weights()[1].shape))
-                    kernel = self.read_bytes(np.prod(conv_layer.get_weights()[0].shape))
-                    
-                    kernel = kernel.reshape(list(reversed(conv_layer.get_weights()[0].shape)))
-                    kernel = kernel.transpose([2,3,1,0])
-                    conv_layer.set_weights([kernel, bias])
-                else:
-                    kernel = self.read_bytes(np.prod(conv_layer.get_weights()[0].shape))
-                    kernel = kernel.reshape(list(reversed(conv_layer.get_weights()[0].shape)))
-                    kernel = kernel.transpose([2,3,1,0])
-                    conv_layer.set_weights([kernel])
-            except ValueError:
-                print("no convolution #" + str(i))     
-    
-    def reset(self):
-        self.offset = 0
 
 class BoundBox:
     def __init__(self, xmin, ymin, xmax, ymax, objness = None, classes = None):
@@ -110,27 +50,6 @@ class BoundBox:
             self.score = self.classes[self.get_label()]
             
         return self.score
-
-def _conv_block(inp, convs, skip=True):
-    x = inp
-    count = 0
-    
-    for conv in convs:
-        if count == (len(convs) - 2) and skip:
-            skip_connection = x
-        count += 1
-        
-        if conv['stride'] > 1: x = ZeroPadding2D(((1,0),(1,0)))(x) # peculiar padding as darknet prefer left and top
-        x = Conv2D(conv['filter'], 
-                   conv['kernel'], 
-                   strides=conv['stride'], 
-                   padding='valid' if conv['stride'] > 1 else 'same', # peculiar padding as darknet prefer left and top
-                   name='conv_' + str(conv['layer_idx']), 
-                   use_bias=False if conv['bnorm'] else True)(x)
-        if conv['bnorm']: x = BatchNormalization(epsilon=0.001, name='bnorm_' + str(conv['layer_idx']))(x)
-        if conv['leaky']: x = LeakyReLU(alpha=0.1, name='leaky_' + str(conv['layer_idx']))(x)
-
-    return Add()([skip_connection, x]) if skip else x
 
 def _interval_overlap(interval_a, interval_b):
     x1, x2 = interval_a
@@ -382,7 +301,7 @@ def draw_boxes(image, boxes, labels, obj_thresh):
     return image      
 
 def _main_(args):
-    weights_path = args.weights
+    model_path = args.model
     image_path   = args.image
 
     # set some parameters
@@ -401,11 +320,7 @@ def _main_(args):
               "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"]
 
     # make the yolov3 model to predict 80 classes on COCO
-    yolov3 = make_yolov3_model()
-
-    # load the weights trained on COCO into the model
-    weight_reader = WeightReader(weights_path)
-    weight_reader.load_weights(yolov3)
+    yolov3 = tf.keras.models.load_model(model_path)
 
     # preprocess the image
     image = cv2.imread(image_path)
