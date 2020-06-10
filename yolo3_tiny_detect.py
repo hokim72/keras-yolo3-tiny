@@ -14,7 +14,7 @@ config.gpu_options.per_process_gpu_memory_fraction = 0.9
 tf.keras.backend.set_session(tf.Session(config=config))
 
 argparser = argparse.ArgumentParser(
-    description='test yolov3 network with coco weights')
+    description='test yolov3 tiny network with coco weights')
 
 argparser.add_argument(
     '-m',
@@ -211,7 +211,7 @@ def _main_(args):
     # set some parameters
     net_h, net_w = 416, 416
     obj_thresh, nms_thresh = 0.5, 0.45
-    anchors = [[116,90,  156,198,  373,326],  [30,61, 62,45,  59,119], [10,13,  16,30,  33,23]]
+    anchors = [[81,82,  135,169,  344,319],  [10,14, 23,27,  37,58]]
     labels = ["person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", \
               "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", \
               "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", \
@@ -223,8 +223,8 @@ def _main_(args):
               "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", \
               "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"]
 
-    # make the yolov3 model to predict 80 classes on COCO
-    yolov3 = tf.keras.models.load_model(model_path)
+    # make the yolov3_tiny model to predict 80 classes on COCO
+    yolov3_tiny = tf.keras.models.load_model(model_path)
 
     # preprocess the image
     image = cv2.imread(image_path)
@@ -232,7 +232,7 @@ def _main_(args):
     new_image = preprocess_input(image, net_h, net_w)
 
     # run the prediction
-    yolos = yolov3.predict(new_image)
+    yolos = yolov3_tiny.predict(new_image)
     boxes = []
 
     for i in range(len(yolos)):

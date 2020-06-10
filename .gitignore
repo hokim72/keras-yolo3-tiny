@@ -1,4 +1,6 @@
 **/*.sw[op]
 yolov3.weights
 yolov3.h5
+yolov3-tiny.weights
+yolov3-tiny.h5
 *_detected.jpg
